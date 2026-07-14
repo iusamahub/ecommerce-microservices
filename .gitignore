@@ -1,0 +1,14 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+*.swp
+
+# Environment
+.env
+.env.local
+
+# Docker volumes (if ever created locally)
+**/mysql-data/
