@@ -12,3 +12,10 @@ Thumbs.db
 
 # Docker volumes (if ever created locally)
 **/mysql-data/
+/order-service/mysql/
+/inventory-service/mysql/
+/product-service/data/
+/api-gateway/volume-data/
+
+# JVM crash logs
+hs_err_pid*.log
