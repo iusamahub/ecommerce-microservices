@@ -1,0 +1,30 @@
+<header class="bg-slate-800 text-white shadow-md">
+  <nav class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+    <a routerLink="/" class="text-lg font-semibold tracking-tight">Microservices Shop</a>
+
+    <div class="flex items-center gap-4">
+      @if (isAuthenticated) {
+        <span class="hidden text-sm text-slate-300 sm:inline">Hi, {{ username }}</span>
+        <a
+          routerLink="/add-product"
+          class="rounded-md bg-slate-700 px-3 py-1.5 text-sm font-medium hover:bg-slate-600"
+        >
+          Create Product
+        </a>
+        <button
+          (click)="logout()"
+          class="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium hover:bg-red-500"
+        >
+          Logout
+        </button>
+      } @else {
+        <button
+          (click)="login()"
+          class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium hover:bg-indigo-500"
+        >
+          Login
+        </button>
+      }
+    </div>
+  </nav>
+</header>

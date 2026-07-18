@@ -1,8 +1,8 @@
 # ecommerce-microservices
 
-A small e-commerce backend built as a set of independent Spring Boot microservices, fronted by a single API gateway. This project is a hands-on way to learn the core building blocks of a microservices architecture: service independence, an API gateway, centralized authentication, API documentation aggregation, and resilience patterns.
+A small e-commerce system built as a set of independent Spring Boot microservices, fronted by a single API gateway, with an Angular SPA on top. This project is a hands-on way to learn the core building blocks of a microservices architecture: service independence, an API gateway, centralized authentication, API documentation aggregation, and resilience patterns.
 
-It's based on the ["Spring Boot Microservices" tutorial series by Programming Techie](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-1), extended and adapted to newer Spring Boot / Spring Cloud versions.
+It's based on the ["Spring Boot Microservices" tutorial series by Programming Techie](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-1), extended and adapted to newer Spring Boot / Spring Cloud versions, plus [Part 7](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-7) for the frontend (adapted to this repo's actual API contracts).
 
 ## Table of contents
 
@@ -22,7 +22,9 @@ It's based on the ["Spring Boot Microservices" tutorial series by Programming Te
 
 ```mermaid
 flowchart LR
-    Client([Client / Postman])
+    Browser([Browser])
+    FE[frontend / Angular :4200]
+    Client([Postman / curl])
     GW[api-gateway :9000]
     Auth[(Keycloak :8181)]
     Product[product-service :8081]
@@ -32,8 +34,11 @@ flowchart LR
     MySQLOrder[(MySQL :3306)]
     MySQLInventory[(MySQL :3316)]
 
+    Browser --> FE
+    FE -- "JWT bearer token" --> GW
     Client -- "JWT bearer token" --> GW
     GW -. "validates token" .-> Auth
+    FE -. "OIDC login (PKCE)" .-> Auth
     GW -- "/api/products" --> Product
     GW -- "/api/order" --> Order
     GW -- "/api/inventory" --> Inventory
@@ -43,16 +48,17 @@ flowchart LR
     Inventory --> MySQLInventory
 ```
 
-Every service is a standalone Spring Boot application with its own database — no service reaches into another service's database directly. The **only** way services talk to each other is over HTTP (order-service calls inventory-service's REST API). The **api-gateway** is the single public entry point: clients never call `product-service`, `order-service`, or `inventory-service` directly, they always go through the gateway on port 9000.
+Every service is a standalone Spring Boot application with its own database — no service reaches into another service's database directly. The **only** way services talk to each other is over HTTP (order-service calls inventory-service's REST API). The **api-gateway** is the single public entry point: clients never call `product-service`, `order-service`, or `inventory-service` directly, they always go through the gateway on port 9000. The **frontend** is just another gateway client — it never calls a backend service directly either.
 
 ## Services at a glance
 
 | Service | Port | Database | Responsibility |
 |---|---|---|---|
+| `frontend` | 4200 | — | Angular SPA. Product listing/ordering, create-product form. All calls go through the gateway. |
 | `api-gateway` | 9000 | — | Single entry point. Routes requests to the right service, enforces JWT authentication, aggregates Swagger docs, applies circuit breakers. |
 | `product-service` | 8081 | MongoDB `:27017` | Product catalog (create/list products). |
 | `order-service` | 8082 | MySQL `:3306` | Places orders. Before saving an order, it calls `inventory-service` to check stock. |
-| `inventory-service` | 8083 | MySQL `:3316` | Tracks stock levels per SKU; answers "is this in stock?". |
+| `inventory-service` | 8083 | MySQL `:3316` | Tracks stock levels per SKU; add/upsert stock, check availability. No more seeded/hardcoded SKUs — stock is created through the API as products are added. |
 
 Supporting infrastructure:
 
@@ -102,6 +108,16 @@ The gateway needs Keycloak running *and configured* before it can authenticate a
 cd api-gateway
 docker compose up -d      # starts Keycloak (+ its own MySQL) on 8181
 ./mvnw spring-boot:run
+```
+
+### 5. frontend (port 4200, Angular)
+
+Requires Node.js. Needs the Keycloak public client set up first — see [`frontend/README.md`](frontend/README.md#one-time-keycloak-setup-public-client-for-the-spa).
+
+```bash
+cd frontend
+npm install
+npm start          # ng serve, http://localhost:4200
 ```
 
 > ⚠️ `application.properties` in each service has local dev DB credentials hardcoded (matching the default `docker-compose.yml` values). Override via environment variables for anything beyond local development — never commit real secrets.
@@ -185,6 +201,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:9000/api/products
 
 ```
 ecommerce-microservices/
+├── frontend/              # Angular SPA: product listing/ordering, create-product form
 ├── api-gateway/          # Single entry point: routing, JWT auth, Swagger aggregation, circuit breakers
 ├── product-service/       # Product catalog (MongoDB)
 ├── order-service/          # Order placement (MySQL) — calls inventory-service
@@ -192,17 +209,19 @@ ecommerce-microservices/
 └── README.md
 ```
 
-Each service follows the same internal layout:
+Each backend service follows the same internal layout:
 
 ```
 src/main/java/com/techie/microservices/<service>/
-├── config/          # OpenAPIConfig, CorsConfig, (RestClientConfig for order-service)
+├── config/          # OpenAPIConfig, (RestClientConfig for order-service)
 ├── controller/      # REST endpoints
 ├── service/         # Business logic
 ├── repository/      # Spring Data repository
 ├── model/           # JPA/Mongo entity
 └── dto/             # Request/response payloads
 ```
+
+CORS is handled once, centrally, in `api-gateway`'s `SecurityConfig` — the individual services don't have their own `CorsConfig` since clients never call them directly. See [`frontend/README.md`](frontend/README.md#notes-on-deviations-from-the-tutorial-article) for the full list of backend adjustments made to support the SPA (including `POST /api/inventory` for adding stock, and `skuCode` on `product-service`'s `Product`).
 
 ## Why these design choices
 
