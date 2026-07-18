@@ -1,0 +1,78 @@
+<div class="mx-auto max-w-lg px-4 py-8">
+  <h2 class="mb-6 text-2xl font-bold text-slate-900">Create Product</h2>
+
+  @if (productCreated) {
+    <div class="mb-4 rounded-md bg-green-50 p-4 text-green-800">Product created successfully!</div>
+  }
+
+  <form [formGroup]="addProductForm" (ngSubmit)="onSubmit()" class="space-y-4">
+    <div>
+      <label class="block text-sm font-medium text-slate-700">SKU Code</label>
+      <input
+        type="text"
+        formControlName="skuCode"
+        placeholder="e.g. iphone_15"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+      />
+      @if (skuCode?.invalid && skuCode?.touched) {
+        <p class="mt-1 text-xs text-red-600">SKU code is required.</p>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Name</label>
+      <input
+        type="text"
+        formControlName="name"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+      />
+      @if (name?.invalid && name?.touched) {
+        <p class="mt-1 text-xs text-red-600">Name is required.</p>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Description</label>
+      <textarea
+        formControlName="description"
+        rows="3"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+      ></textarea>
+      @if (description?.invalid && description?.touched) {
+        <p class="mt-1 text-xs text-red-600">Description is required.</p>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Price</label>
+      <input
+        type="number"
+        step="0.01"
+        formControlName="price"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+      />
+      @if (price?.invalid && price?.touched) {
+        <p class="mt-1 text-xs text-red-600">Price must be greater than 0.</p>
+      }
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Initial Stock</label>
+      <input
+        type="number"
+        formControlName="initialStock"
+        class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"
+      />
+      @if (initialStock?.invalid && initialStock?.touched) {
+        <p class="mt-1 text-xs text-red-600">Initial stock must be at least 1.</p>
+      }
+    </div>
+
+    <button
+      type="submit"
+      class="rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500"
+    >
+      Create
+    </button>
+  </form>
+</div>
