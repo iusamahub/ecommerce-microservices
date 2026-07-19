@@ -4,45 +4,43 @@
       Please log in to browse products.
     </div>
   } @else {
-    @if (orderSuccess) {
-      <div class="mb-4 rounded-md bg-green-50 p-4 text-green-800">Order placed successfully!</div>
-    }
-    @if (orderFailed) {
-      <div class="mb-4 rounded-md bg-red-50 p-4 text-red-800">
-        Failed to place order. The product may be out of stock.
-      </div>
-    }
-
     <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
       @for (product of products; track product.id) {
-        <div class="flex flex-col rounded-lg border border-slate-200 p-4 shadow-sm">
-          <h3 class="text-lg font-semibold text-slate-900">{{ product.name }}</h3>
-          <p class="text-xs uppercase tracking-wide text-slate-400">{{ product.skuCode }}</p>
-          <p class="mt-1 flex-1 text-sm text-slate-600">{{ product.description }}</p>
-          <p class="mt-2 text-xl font-bold text-slate-900">{{ product.price | currency }}</p>
+        @if (inStock(product)) {
+          <div class="flex flex-col rounded-lg border border-slate-200 p-4 shadow-sm">
+            <h3 class="text-lg font-semibold text-slate-900">{{ product.name }}</h3>
+            <p class="text-xs uppercase tracking-wide text-slate-400">{{ product.skuCode }}</p>
+            <p class="mt-1 flex-1 text-sm text-slate-600">{{ product.description }}</p>
+            <p class="mt-2 text-xl font-bold text-slate-900">{{ product.price | currency }}</p>
+            <p class="mt-1 text-xs text-slate-500">{{ stockBySkuCode[product.skuCode] }} in stock</p>
 
-          <div class="mt-4 flex items-center gap-2">
-            <input
-              type="number"
-              min="1"
-              class="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
-              placeholder="Qty"
-              [(ngModel)]="quantities[product.id!]"
-            />
-            <button
-              (click)="orderProduct(product, quantities[product.id!])"
-              class="flex-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
-            >
-              Order
-            </button>
+            <div class="mt-4 flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                [max]="stockBySkuCode[product.skuCode]"
+                class="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                placeholder="Qty"
+                [(ngModel)]="quantities[product.id!]"
+              />
+              <button
+                (click)="orderProduct(product, quantities[product.id!])"
+                class="flex-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
+              >
+                Order
+              </button>
+            </div>
+            @if (quantityIsNull) {
+              <p class="mt-1 text-xs text-red-600">Please enter a quantity.</p>
+            }
           </div>
-          @if (quantityIsNull) {
-            <p class="mt-1 text-xs text-red-600">Please enter a quantity.</p>
-          }
-        </div>
+        }
       } @empty {
         <p class="text-slate-500">No products available yet.</p>
       }
     </div>
+    @if (products.length > 0 && !hasInStockProducts) {
+      <p class="text-slate-500">All products are currently out of stock.</p>
+    }
   }
 </div>

@@ -24,7 +24,7 @@ The existing `test-client-id` client documented in the [root README](../README.m
 
 ## Running
 
-Start the backend first (MongoDB, MySQL x2, Keycloak + all 4 Spring Boot services — see [root README](../README.md#quick-start)), then:
+Start the backend first (MongoDB, MySQL x2, Keycloak, Kafka + Schema Registry, MailHog, and all 5 Spring Boot services — see [root README](../README.md#quick-start)), then:
 
 ```bash
 npm install
@@ -39,11 +39,12 @@ The tutorial article was written against a slightly different backend than what'
 |---|---|---|
 | `GET/POST /api/product` | `GET/POST /api/products` (plural) | `ProductService` calls the plural path. |
 | `Product` has a `skuCode` field | Originally missing from `product-service`'s `Product`/`ProductRequest`/`ProductResponse` | **Added `skuCode`** to all three (see `product-service/.../model/Product.java`, `dto/ProductRequest.java`, `dto/ProductResponse.java`) so it can be set on creation and used for ordering. Requires a `product-service` restart to pick up. |
-| Order response is JSON with `userDetails` | `POST /api/order` returns a **plain-text** string (`"Order placed successfully"`), and `OrderRequest` has no user/email fields at all | `OrderService.orderProduct()` uses `responseType: 'text'`; no user details are sent. |
+| Order response is JSON with `userDetails`; tutorial has the user type it into a form | `POST /api/order` returns a **plain-text** string (`"Order placed successfully"`) — unchanged, still plain text. `OrderRequest.userDetails` **is** sent, but sourced from the Keycloak ID token (`oidcSecurityService.userData$` in `home-page.component.ts`) instead of a typed form field — the user is already logged in, so there's no reason to make them retype their own email/name. Needed the `email` OIDC scope added in `auth.config.ts` (`profile` alone doesn't include it). | `order-service` uses `userDetails.email/firstName/lastName` to build the `OrderPlacedEvent` it publishes to Kafka for `notification-service` — see [root README](../README.md#event-driven-order-confirmations-kafka). |
 | Realm: `spring-microservices-security-realm` | Realm: `spring-microservices-realm` | `auth.config.ts` points at the real realm name. |
 | Auth interceptor subscribes and unconditionally calls `next(req)` a second time | — | Rewritten with `mergeMap` so the request is only forwarded once, with the token attached if available. |
 | — | `product-service`, `order-service`, `inventory-service` each had their own `CorsConfig.java` **in addition to** `api-gateway`'s CORS config, producing duplicate `Access-Control-Allow-Origin` response headers that browsers reject outright | Deleted the per-service `CorsConfig.java` files — CORS is handled once, at the gateway, since clients never call the services directly. |
 | — | `inventory-service` only had a read-only `GET /api/inventory` stock-check endpoint; stock was seeded once via a Flyway migration (`V2__add_inventory.sql`, 4 fixed SKUs) with no way to add more through the API | **Added `POST /api/inventory`** (`InventoryController.addStock`) that upserts stock for a SKU. The "Create Product" form now has an **Initial Stock** field; submitting it calls `product-service` then `inventory-service` so any newly created product is immediately orderable — no hardcoded SKUs required. |
+| — | `product-service`'s `ProductResponse` has no quantity field (that's `inventory-service`'s data), so the storefront couldn't show stock or hide sold-out items | **Added `GET /api/inventory?skuCodes=a,b,c`** (`InventoryController.getQuantities`, disambiguated from the existing single-SKU check via `@GetMapping(params=...)`) returning quantities for a batch of SKUs in one call. `home-page.component.ts` fetches this right after the product list loads, shows "N in stock", and filters out any product with 0 (or no inventory row at all). |
 
 ### Placing an order still requires stock
 

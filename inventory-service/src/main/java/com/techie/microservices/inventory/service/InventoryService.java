@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class InventoryService {
@@ -16,6 +18,13 @@ public class InventoryService {
     @Transactional(readOnly = true)
     public boolean isInStock(String skuCode, Integer quantity) {
         return inventoryRepository.existsBySkuCodeAndQuantityIsGreaterThanEqual(skuCode, quantity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<InventoryResponse> getQuantities(List<String> skuCodes) {
+        return inventoryRepository.findBySkuCodeIn(skuCodes).stream()
+                .map(inventory -> new InventoryResponse(inventory.getId(), inventory.getSkuCode(), inventory.getQuantity()))
+                .toList();
     }
 
     @Transactional
