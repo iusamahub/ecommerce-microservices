@@ -16,6 +16,7 @@ Thumbs.db
 /inventory-service/mysql/
 /product-service/data/
 /api-gateway/volume-data/
+/api-gateway/docker/tempo/tempo-data/
 
 # JVM crash logs
 hs_err_pid*.log

@@ -20,8 +20,8 @@ public class RestClientConfig {
     private String inventoryServiceUrl;
 
     @Bean
-    public InventoryClient inventoryClient() {
-        RestClient restClient = RestClient.builder()
+    public InventoryClient inventoryClient(RestClient.Builder restClientBuilder) {
+        RestClient restClient = restClientBuilder
                 .baseUrl(inventoryServiceUrl)
                 .requestFactory(getClientRequestFactory())
                 .build();
