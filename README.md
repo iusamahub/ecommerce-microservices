@@ -1,8 +1,8 @@
 # ecommerce-microservices
 
-A small e-commerce system built as a set of independent Spring Boot microservices, fronted by a single API gateway, with an Angular SPA on top and Kafka tying the backend together for event-driven workflows. This project is a hands-on way to learn the core building blocks of a microservices architecture: service independence, an API gateway, centralized authentication, API documentation aggregation, resilience patterns, and asynchronous, event-driven communication.
+A small e-commerce system built as a set of independent Spring Boot microservices, fronted by a single API gateway, with an Angular SPA on top, Kafka tying the backend together for event-driven workflows, and a full Grafana observability stack (logs, metrics, traces) watching all of it. This project is a hands-on way to learn the core building blocks of a microservices architecture: service independence, an API gateway, centralized authentication, API documentation aggregation, resilience patterns, asynchronous event-driven communication, and observability.
 
-It's based on the ["Spring Boot Microservices" tutorial series by Programming Techie](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-1), extended and adapted to newer Spring Boot / Spring Cloud versions, [Part 7](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-7) for the frontend, and [Part 8](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-8) for the Kafka event-driven piece (all adapted to this repo's actual API contracts).
+It's based on the ["Spring Boot Microservices" tutorial series by Programming Techie](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-1), extended and adapted to newer Spring Boot / Spring Cloud versions, [Part 7](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-7) for the frontend, [Part 8](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-8) for the Kafka event-driven piece, and [Part 9](https://programmingtechie.com/articles/spring-boot-microservices-tutorial-part-9) for observability (all adapted to this repo's actual API contracts and ports).
 
 ## Table of contents
 
@@ -15,6 +15,7 @@ It's based on the ["Spring Boot Microservices" tutorial series by Programming Te
 - [API documentation (Swagger UI)](#api-documentation-swagger-ui)
 - [Resilience: circuit breaker demo](#resilience-circuit-breaker-demo)
 - [Event-driven order confirmations (Kafka)](#event-driven-order-confirmations-kafka)
+- [Observability: logs, metrics, and traces (Grafana stack)](#observability-logs-metrics-and-traces-grafana-stack)
 - [Project structure](#project-structure)
 - [Why these design choices](#why-these-design-choices)
 - [Troubleshooting](#troubleshooting)
@@ -77,6 +78,10 @@ Supporting infrastructure:
 | Schema Registry | 8085 | Stores and validates the Avro contract (`OrderPlacedEvent`) shared by producer and consumer. |
 | Kafka UI | 8086 | Dashboard for browsing topics, messages, and consumer group lag. |
 | MailHog | 8025 (UI) / 1025 (SMTP) | Fake local SMTP server — order confirmation emails land here instead of a real inbox. |
+| Grafana | 3000 | Dashboards over all three signals below — see [Observability](#observability-logs-metrics-and-traces-grafana-stack). |
+| Prometheus | 9090 | Scrapes `/actuator/prometheus` on every service every 2s (metrics). |
+| Loki | 3100 | Log aggregation — every service ships its logs here via a Logback appender. |
+| Tempo | 3200 (query) / 9411 (zipkin ingest) | Distributed trace storage. |
 
 ## Prerequisites
 
@@ -252,6 +257,30 @@ The `avro-maven-plugin` generates `OrderPlacedEvent.java` from this file at buil
 
 `notification-service` has no REST controller, so it isn't wired into `api-gateway`'s routes or Swagger aggregation — there's nothing to route to or document.
 
+## Observability: logs, metrics, and traces (Grafana stack)
+
+Every backend service (all five: `api-gateway`, `product-service`, `order-service`, `inventory-service`, `notification-service`) ships all three observability signals to the same place, so a single request can be followed end-to-end without SSHing into any one service:
+
+- **Logs → Loki.** A `logback-spring.xml` in every service adds a `Loki4jAppender` that ships every log line to Loki, labeled with `application=<service-name>`.
+- **Metrics → Prometheus.** `spring-boot-starter-actuator` + `micrometer-registry-prometheus` expose `/actuator/prometheus` on every service; Prometheus scrapes all five every 2 seconds (see `api-gateway/docker/prometheus/prometheus.yml`).
+- **Traces → Tempo.** `micrometer-tracing-bridge-brave` + `zipkin-reporter-brave` turn every incoming request (and every outgoing call) into a span, reported to Tempo over the Zipkin protocol. `management.tracing.sampling.probability=1.0` traces *every* request — fine for a demo, far too much overhead for production.
+- **Grafana** ties all three together with pre-provisioned datasources (`api-gateway/docker/grafana/datasources.yml`) — including exemplar links from a Prometheus metric straight to the Tempo trace that produced it, and from a Tempo trace straight to its Loki logs.
+
+**Two things needed extra wiring beyond the boilerplate**, because Spring's auto-instrumentation only reaches code it already owns:
+
+1. **`order-service`'s call to `inventory-service`** (`RestClientConfig.java`) used to build its `RestClient` via the bare static `RestClient.builder()`, which bypasses Spring's auto-configured, observation-aware builder entirely. Changed to inject the `RestClient.Builder` bean instead — that's the one Spring wires an `ObservationRegistry` into automatically, so the HTTP call to `inventory-service` now shows up as a child span (and gets HTTP client metrics) instead of being an invisible gap in the trace.
+2. **Kafka doesn't get traced for free either** — a producer send and a consumer poll are two unrelated calls unless something explicitly propagates trace context through the message headers. `spring.kafka.template.observation-enabled=true` on `order-service` (the producer) and `spring.kafka.listener.observation-enabled=true` on `notification-service` (the consumer) turn on Micrometer's Kafka instrumentation on both ends, so a trace started when an order is placed continues across the Kafka boundary into the email-sending span, instead of the two ends showing up as disconnected traces.
+
+**Running it**: the whole stack (Loki, Prometheus, Tempo, Grafana) lives in `api-gateway/docker-compose.yml` alongside Keycloak — `docker compose up -d` in `api-gateway/` starts it along with everything else.
+
+**Seeing it work:**
+
+1. Open **Grafana** at `http://localhost:3000` (anonymous access is enabled for local dev — no login needed). Prometheus, Loki, and Tempo are already configured as datasources.
+2. Place a few orders through the frontend to generate traffic across all five services.
+3. **Explore → Prometheus**: query `http_server_requests_seconds_count` to see request volume per service (labeled by `application`).
+4. **Explore → Tempo**: search for a recent trace on `order-service` — you should see one trace spanning the HTTP call to `inventory-service` *and*, once notification-service picks up the Kafka event, the email-sending span too.
+5. **Explore → Loki**: query `{application="order-service"}` to see that service's logs, correlated with the trace ID from step 4 via the derived-field link Grafana sets up automatically.
+
 ## Project structure
 
 ```
@@ -269,7 +298,7 @@ The three REST-backed services follow the same internal layout:
 
 ```
 src/main/java/com/techie/microservices/<service>/
-├── config/          # OpenAPIConfig, (RestClientConfig for order-service)
+├── config/          # OpenAPIConfig, ObservationConfig, (RestClientConfig for order-service)
 ├── controller/      # REST endpoints
 ├── service/         # Business logic
 ├── repository/      # Spring Data repository
