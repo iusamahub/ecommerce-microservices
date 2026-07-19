@@ -1,8 +1,10 @@
 import { Component, inject } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Product } from '../../model/product';
 import { ProductService } from '../../services/product.service';
 import { InventoryService } from '../../services/inventory.service';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-add-product',
@@ -14,6 +16,8 @@ import { InventoryService } from '../../services/inventory.service';
 export class AddProductComponent {
   private readonly productService = inject(ProductService);
   private readonly inventoryService = inject(InventoryService);
+  private readonly toastService = inject(ToastService);
+  private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
 
   addProductForm: FormGroup = this.fb.group({
@@ -23,8 +27,6 @@ export class AddProductComponent {
     price: [0, [Validators.required, Validators.min(0.01)]],
     initialStock: [0, [Validators.required, Validators.min(1)]],
   });
-
-  productCreated = false;
 
   onSubmit(): void {
     if (this.addProductForm.invalid) {
@@ -45,8 +47,8 @@ export class AddProductComponent {
       this.inventoryService
         .addStock({ skuCode, quantity: this.addProductForm.get('initialStock')?.value })
         .subscribe(() => {
-          this.productCreated = true;
-          this.addProductForm.reset({ skuCode: '', name: '', description: '', price: 0, initialStock: 0 });
+          this.toastService.show('Product created successfully!', 'success');
+          this.router.navigate(['/']);
         });
     });
   }

@@ -14,4 +14,8 @@ export class InventoryService {
   addStock(inventory: Inventory): Observable<Inventory> {
     return this.httpClient.post<Inventory>(API_URL, inventory);
   }
+
+  getQuantities(skuCodes: string[]): Observable<Inventory[]> {
+    return this.httpClient.get<Inventory[]>(API_URL, { params: { skuCodes } });
+  }
 }
